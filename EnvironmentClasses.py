@@ -59,7 +59,7 @@ class Base():
         obstacles.append(top_wall)
         return obstacles
 
-    def get_observation(self, x, y, theta, fov):
+    def get_observation(self, x, y, theta, fov=[0]):
         # A function that simulates looking around the environment from the point (x, y, theta) in the directions of los
         # Requires:
         #   x: The x position of the observation
@@ -73,6 +73,10 @@ class Base():
             radian = theta+radian
             if radian < 0:
                 radian += 2*np.math.pi
+            if radian > 2*np.math.pi:
+                radian -= 2*np.math.pi
+            if np.abs(radian - 2*np.math.pi) < 0.001:
+                radian = 0
             best_dist = np.math.inf
             for obs in self.obstacles:
                 if radian == 0:
@@ -129,8 +133,27 @@ class Base():
             on_line = (x3 - 0.001 <= x <= x4 + 0.001) and np.abs(y4 - y) <= 0.01
         return on_line
 
-    def show_env(self, lines=[], point=None):
+    def get_rays(self, x, y, theta, dir):
+        # A function to calculate all of the ray lines
+        # Requires:
+        #   x, y, theta: The position to shoot the rays from
+        #   dir: a list of directions to look in relative to theta
+        # Returns:
+        #   lines: The list of rays, has length dir
+
+        dists = self.get_observation(x, y, theta, dir)
+        lines = []
+        for key in dists:
+            theta = key
+            dist = dists[key]
+            x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
+            line = [[x, y], [x1, y1]]
+            lines.append(line)
+        return lines
+
+    def show_env(self, lines=[], point=None, step=None):
         # A function to show the environment and all within it
+        # Saves the figure to a png figure in the folder Figures
         # Requires:
         #   Nothing
         # Returns:
@@ -152,26 +175,21 @@ class Base():
         plt.xlim(-10, self.width + 10)
         plt.ylim(-10, self.height + 10)
         plt.gca().set_aspect('equal', adjustable='box')
-        plt.show()
+        # plt.show()
+        if step:
+            name = f"Step_{step}"
+        else:
+            name = 'Plot'
+        plt.savefig(f'Figures/{name}')
+        plt.clf()
 
 
 if __name__ == "__main__":
-    def plotting(x, y, thetas, env, dir):
-        dists = env.get_observation(x, y, dir, thetas)
-        lines = []
-        for key in dists:
-            theta = key
-            dist = dists[key]
-            x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
-            line = [[x, y], [x1, y1]]
-            lines.append(line)
-        env.show_env(point=(x, y), lines=lines)
-
-
     env = Base(width=1000, height=1000, num_obstables=10, box_w=100, box_h=100)
     thetas = []
     for i in range(-45, 45, 1):
         thetas.append(i * np.pi / 180)
     for x in range(0, 360, 5):
-        plotting(500+x, 500-x, thetas, env, x * np.pi / 180)
+        rays = env.get_rays(500+x, 500-x,x * np.pi / 180, thetas)
+        env.show_env(lines=rays)
         time.sleep(1)
