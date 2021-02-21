@@ -59,7 +59,7 @@ class Base():
         obstacles.append(top_wall)
         return obstacles
 
-    def get_observation(self, x, y, theta, fov):
+    def get_observation(self, x, y, theta, fov=[0]):
         # A function that simulates looking around the environment from the point (x, y, theta) in the directions of los
         # Requires:
         #   x: The x position of the observation
