@@ -3,7 +3,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-#Testing commits
 class Base():
 
     def __init__(self, height=1024, width=1024, num_obstables=0, box_w=100, box_h=100):
@@ -35,7 +34,7 @@ class Base():
         left_wall = ((0, 0), (0, self.height))
         bottom_wall = ((0, self.height), (self.width, self.height))
         right_wall = ((self.width, 0), (self.width, self.height))
-        top_wall = ((self.width, 0), (0, 0))
+        top_wall = ((0, 0), (self.width, 0))
 
 
         # Generate num random boxes in the environment
@@ -68,13 +67,15 @@ class Base():
         #   los: A list containing the angles +- of theta to look in
         # Returns:
         #   observation: a list of distances to objects in the directions of los, same dimension as los
-        observations = []
+        observations = {}
         for radian in los:
             best_dist = np.math.inf
             # self.obstacles = [self.obstacles[1]]
             for obs in self.obstacles:
-                if radian == 0:
-                    m1 = 0
+                if radian == np.math.pi/2:
+                    m1 = 100000
+                elif radian == 3*np.math.pi/2:
+                    m1 = 100000
                 else:
                     m1 = np.math.tan(radian)
                 (x3, y3), (x4, y4) = obs
@@ -91,12 +92,14 @@ class Base():
                 dist = np.sqrt((X[1] - x) ** 2 + (X[0] - y) ** 2)
                 # x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
                 theta1 = np.math.atan2(y1-y,x1-x)
+                if theta1 < 0:
+                    theta1 += 2*np.math.pi
                 # print(X)
-                # print(radian, theta1)
+                print(radian, theta1)
                 if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1,y1), obs):
                     best_dist = dist
                 # observations.append(dist)
-            observations.append(best_dist)
+            observations[radian] = best_dist
         return observations
 
     def check_on_line(self, point, line):
@@ -108,13 +111,12 @@ class Base():
         #   on_line: Boolean for whether the point is on the line
         x, y = point
         (x3, y3), (x4, y4) = line
-        print(point, line)
         if x4 == x3:
             # Vertical line
-            on_line = y3 < y < y4 and np.abs(x4 - x) <= 0.001
+            on_line = (y3 < y < y4) and np.abs(x4 - x) <= 0.01
         else:
-            on_line = x3 < x < y4 and np.abs(y4 - y) <= 0.001
-
+            on_line = (x3 < x < x4) and np.abs(y4 - y) <= 0.01
+        print(point, line, on_line)
         return on_line
 
 
@@ -146,17 +148,19 @@ class Base():
 
 
 if __name__ == "__main__":
-    env = Base(width=100, height=100, num_obstables=1, box_w=100, box_h=100)
+    env = Base(width=100, height=100, num_obstables=0, box_w=100, box_h=100)
     thetas = []
-    for i in range(1, 360, 100):
+    for i in range(360, 90):
         thetas.append(i*np.pi/180)
     x, y = 20, 20
     dists = env.get_observation(x, y, 0, thetas)
+    print(dists)
     lines = []
-    for theta in thetas:
-        for dist in dists:
-            x1, y1 = dist*np.math.cos(theta)+x, dist*np.sin(theta)+y
-            line = [[x,y],[x1,y1]]
-            lines.append(line)
+    for key in dists:
+        theta = key
+        dist = dists[key]
+        x1, y1 = dist*np.math.cos(theta)+x, dist*np.sin(theta)+y
+        line = [[x,y],[x1,y1]]
+        lines.append(line)
     env.show_env(point=(x, y), lines=lines)
     print(len(env.obstacles))
