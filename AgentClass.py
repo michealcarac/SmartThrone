@@ -40,7 +40,8 @@ class Manual():
 
         if dir == 0:
             dists = self.env.get_observation(self.x, self.y, self.theta)
-            if dists[0] < self.LINEAR:
+
+            if dists[self.theta] < self.LINEAR:
                 raise InvalidMove
             else:
                 self.x += self.LINEAR * np.math.cos(self.theta)
@@ -67,17 +68,28 @@ class Manual():
         y2 = self.y + self.LINEAR * np.math.sin(self.theta)
         return [(x1, y1), (x2, y2)]
 
-    def show_agent(self):
+    def show_agent(self, counter):
         # A function to show the agent in the environment and the direction its facing
         # Requires:
-        #   Nothing
+        #   Counter: to track the steps of the agent
         # Returns:
         #   Nothing
         heading = self.make_heading()
-        self.env.show_env(lines=[heading], point=(self.x, self.y))
+        self.env.show_env(lines=[heading], point=(self.x, self.y), step=counter)
 
 
 if __name__ == "__main__":
-    env = Base()
-    agent = Manual(200, 200, 0, range(-45, 45), 100, np.math.radians(5), env)
-    agent.show_agent()
+    env = Base(num_obstables=0)
+    agent = Manual(200, 200, 0, range(-45, 45), 25, np.math.radians(5), env)
+    agent.show_agent(counter=None)
+    move_list = [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0]
+    for i, j in enumerate(move_list):
+        agent.move(j)
+        agent.show_agent(i)
+    # command = int(input("Pick a direction to move: "))
+    # counter = 0
+    # while command != -1:
+    #     agent.move(command)
+    #     agent.show_agent(counter=counter)
+    #     counter+=1
+    #     command = int(input("Pick a direction to move: "))

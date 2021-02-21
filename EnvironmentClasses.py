@@ -129,8 +129,9 @@ class Base():
             on_line = (x3 - 0.001 <= x <= x4 + 0.001) and np.abs(y4 - y) <= 0.01
         return on_line
 
-    def show_env(self, lines=[], point=None):
+    def show_env(self, lines=[], point=None, step=None):
         # A function to show the environment and all within it
+        # Saves the figure to a png figure in the folder Figures
         # Requires:
         #   Nothing
         # Returns:
@@ -152,7 +153,13 @@ class Base():
         plt.xlim(-10, self.width + 10)
         plt.ylim(-10, self.height + 10)
         plt.gca().set_aspect('equal', adjustable='box')
-        plt.show()
+        # plt.show()
+        if step:
+            name = f"Step_{step}"
+        else:
+            name = 'Plot'
+        plt.savefig(f'Figures/{name}')
+        plt.clf()
 
 
 if __name__ == "__main__":
