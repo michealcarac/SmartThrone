@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+#Testing commits
 class Base():
 
     def __init__(self, height=1024, width=1024, num_obstables=0, box_w=100, box_h=100):
