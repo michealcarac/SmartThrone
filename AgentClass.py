@@ -42,18 +42,19 @@ class Manual():
             dists = self.env.get_observation(self.x, self.y, self.theta)
 
             if dists[self.theta] < self.LINEAR:
-                raise InvalidMove
+                #raise InvalidMove
+                pass
             else:
                 self.x += self.LINEAR * np.math.cos(self.theta)
                 self.y += self.LINEAR * np.math.sin(self.theta)
         elif dir == 1:
             self.theta += self.ROTATIONAL
             if self.theta > 2 * np.math.pi:
-                self.theta -= 2 * np.math.pi
+                self.theta -= 2 * np.math.pi#+(1e-6)
         else:
             self.theta -= self.ROTATIONAL
             if self.theta < 0:
-                self.theta += 2 * np.math.pi
+                self.theta += 2 * np.math.pi#-(1e-6)
 
     def make_heading(self):
         # Helper function to show the heading of the agent
@@ -75,14 +76,18 @@ class Manual():
         # Returns:
         #   Nothing
         heading = self.make_heading()
-        self.env.show_env(lines=[heading], point=(self.x, self.y), step=counter)
+        rays = self.env.get_rays(self.x, self.y, self.theta, self.FOV)
+        self.env.show_env(lines=np.concatenate([rays, [heading]]), point=(self.x, self.y), step=counter)
 
 
 if __name__ == "__main__":
-    env = Base(num_obstables=0)
-    agent = Manual(200, 200, 0, range(-45, 45), 25, np.math.radians(5), env)
+    env = Base(num_obstables=10, box_h=50, box_w=50)
+    fov = []
+    for i in range(-45, 45):
+        fov.append(i * np.pi / 180)
+    agent = Manual(200, 200, 0, fov, 25, np.math.radians(5), env)
     agent.show_agent(counter=None)
-    move_list = [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0]
+    move_list = [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
     for i, j in enumerate(move_list):
         agent.move(j)
         agent.show_agent(i)
