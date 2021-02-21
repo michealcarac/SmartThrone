@@ -2,6 +2,8 @@
 # The base encironment sets up all the functions and parameters and are overwritten in the subclasses
 import numpy as np
 import matplotlib.pyplot as plt
+import time
+
 
 class Base():
 
@@ -36,7 +38,6 @@ class Base():
         right_wall = ((self.width, 0), (self.width, self.height))
         top_wall = ((0, 0), (self.width, 0))
 
-
         # Generate num random boxes in the environment
         # Overlap is not checked for to allow for more complicated structures
         for i in range(num):
@@ -58,7 +59,7 @@ class Base():
         obstacles.append(top_wall)
         return obstacles
 
-    def get_observation(self, x, y, theta, los):
+    def get_observation(self, x, y, theta, fov):
         # A function that simulates looking around the environment from the point (x, y, theta) in the directions of los
         # Requires:
         #   x: The x position of the observation
@@ -68,25 +69,26 @@ class Base():
         # Returns:
         #   observation: a list of distances to objects in the directions of los, same dimension as los
         observations = {}
-        for radian in los:
+        for radian in fov:
+            radian = theta+radian
+            if radian < 0:
+                radian += 2*np.math.pi
             best_dist = np.math.inf
             for obs in self.obstacles:
                 if radian == 0:
                     (x3, y3), (x4, y4) = obs
                     x1, y1 = x3, y
-                    dist = x3-x
+                    dist = x3 - x
                     theta1 = np.math.atan2(y1 - y, x1 - x)
                     if theta1 < 0:
                         theta1 += 2 * np.math.pi
-                    # print(X)
-                    print(radian, theta1)
                     if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1, y1), obs):
                         best_dist = dist
 
                 else:
-                    if radian == np.math.pi/2:
+                    if radian == np.math.pi / 2:
                         m1 = 100000
-                    elif radian == 3*np.math.pi/2:
+                    elif radian == 3 * np.math.pi / 2:
                         m1 = 100000
                     else:
                         m1 = np.math.tan(radian)
@@ -97,22 +99,17 @@ class Base():
                         m2 = 0
                     a = y - m1 * x
                     b = y3 - m2 * x3
-                    A = [[1, -m2],[1, -m1]]
-                    B = [b,a]
+                    A = [[1, -m2], [1, -m1]]
+                    B = [b, a]
                     A_ = np.linalg.inv(A)
                     X = A_.dot(B)
-                    print(f'Matrix X: {X}')
                     y1, x1 = X
                     dist = np.sqrt((X[1] - x) ** 2 + (X[0] - y) ** 2)
-                    # x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
-                    theta1 = np.math.atan2(y1-y,x1-x)
+                    theta1 = np.math.atan2(y1 - y, x1 - x)
                     if theta1 < 0:
-                        theta1 += 2*np.math.pi
-                    # print(X)
-                    print(radian, theta1)
-                    if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1,y1), obs):
+                        theta1 += 2 * np.math.pi
+                    if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1, y1), obs):
                         best_dist = dist
-                    # observations.append(dist)
             observations[radian] = best_dist
         return observations
 
@@ -127,12 +124,10 @@ class Base():
         (x3, y3), (x4, y4) = line
         if x4 == x3:
             # Vertical line
-            on_line = (y3-0.001 <= y <= y4+0.001) and np.abs(x4 - x) <= 0.01
+            on_line = (y3 - 0.001 <= y <= y4 + 0.001) and np.abs(x4 - x) <= 0.01
         else:
-            on_line = (x3-0.001 <= x <= x4+0.001) and np.abs(y4 - y) <= 0.01
-        print(point, line, on_line)
+            on_line = (x3 - 0.001 <= x <= x4 + 0.001) and np.abs(y4 - y) <= 0.01
         return on_line
-
 
     def show_env(self, lines=[], point=None):
         # A function to show the environment and all within it
@@ -151,30 +146,32 @@ class Base():
             plt.plot(data[0], data[1], 'r')
 
         if point:
-            print('Plotting point')
             plt.plot(point[0], point[1], '*g')
 
-        plt.axis('on')
-        plt.xlim(-10, self.width+10)
-        plt.ylim(-10, self.height+10)
+        plt.axis('off')
+        plt.xlim(-10, self.width + 10)
+        plt.ylim(-10, self.height + 10)
         plt.gca().set_aspect('equal', adjustable='box')
         plt.show()
 
 
 if __name__ == "__main__":
+    def plotting(x, y, thetas, env, dir):
+        dists = env.get_observation(x, y, dir, thetas)
+        lines = []
+        for key in dists:
+            theta = key
+            dist = dists[key]
+            x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
+            line = [[x, y], [x1, y1]]
+            lines.append(line)
+        env.show_env(point=(x, y), lines=lines)
+
+
     env = Base(width=1000, height=1000, num_obstables=10, box_w=100, box_h=100)
     thetas = []
-    for i in range(0, 360, 10):
-        thetas.append(i*np.pi/180)
-    x, y = 200, 200
-    dists = env.get_observation(x, y, 0, thetas)
-    print(dists)
-    lines = []
-    for key in dists:
-        theta = key
-        dist = dists[key]
-        x1, y1 = dist*np.math.cos(theta)+x, dist*np.sin(theta)+y
-        line = [[x,y],[x1,y1]]
-        lines.append(line)
-    env.show_env(point=(x, y), lines=lines)
-    print(len(env.obstacles))
+    for i in range(-45, 45, 1):
+        thetas.append(i * np.pi / 180)
+    for x in range(0, 360, 5):
+        plotting(500+x, 500-x, thetas, env, x * np.pi / 180)
+        time.sleep(1)
