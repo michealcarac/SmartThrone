@@ -44,10 +44,10 @@ class Base():
             rand_y = np.random.randint(0, self.height)
             rand_w = np.random.randint(0, box_w)
             rand_h = np.random.randint(0, box_h)
-            top_left = (rand_x - rand_w // 2, rand_y - rand_h // 2)
-            bottom_left = (rand_x - rand_w // 2, rand_y + rand_h // 2)
-            top_right = (rand_x + rand_w // 2, rand_y - rand_h // 2)
-            bottom_right = (rand_x + rand_w // 2, rand_y + rand_h // 2)
+            top_left = (rand_x - rand_w // 2, rand_y + rand_h // 2)
+            bottom_left = (rand_x - rand_w // 2, rand_y - rand_h // 2)
+            top_right = (rand_x + rand_w // 2, rand_y + rand_h // 2)
+            bottom_right = (rand_x + rand_w // 2, rand_y - rand_h // 2)
             box = (
                 (top_left, top_right), (bottom_right, top_right), (bottom_left, bottom_right), (bottom_left, top_left))
             for wall in box:
@@ -70,35 +70,49 @@ class Base():
         observations = {}
         for radian in los:
             best_dist = np.math.inf
-            # self.obstacles = [self.obstacles[1]]
             for obs in self.obstacles:
-                if radian == np.math.pi/2:
-                    m1 = 100000
-                elif radian == 3*np.math.pi/2:
-                    m1 = 100000
+                if radian == 0:
+                    (x3, y3), (x4, y4) = obs
+                    x1, y1 = x3, y
+                    dist = x3-x
+                    theta1 = np.math.atan2(y1 - y, x1 - x)
+                    if theta1 < 0:
+                        theta1 += 2 * np.math.pi
+                    # print(X)
+                    print(radian, theta1)
+                    if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1, y1), obs):
+                        best_dist = dist
+
                 else:
-                    m1 = np.math.tan(radian)
-                (x3, y3), (x4, y4) = obs
-                if x4 == x3:
-                    m2 = 1000000
-                else:
-                    m2 = 0
-                a = y - m1 * x
-                b = y3 - m2 * x3
-                A = [[1, -m2],[1, -m1]]
-                B = [b,a]
-                X = np.linalg.inv(A).dot(B)
-                y1, x1 = X
-                dist = np.sqrt((X[1] - x) ** 2 + (X[0] - y) ** 2)
-                # x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
-                theta1 = np.math.atan2(y1-y,x1-x)
-                if theta1 < 0:
-                    theta1 += 2*np.math.pi
-                # print(X)
-                print(radian, theta1)
-                if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1,y1), obs):
-                    best_dist = dist
-                # observations.append(dist)
+                    if radian == np.math.pi/2:
+                        m1 = 100000
+                    elif radian == 3*np.math.pi/2:
+                        m1 = 100000
+                    else:
+                        m1 = np.math.tan(radian)
+                    (x3, y3), (x4, y4) = obs
+                    if x4 == x3:
+                        m2 = 1000000
+                    else:
+                        m2 = 0
+                    a = y - m1 * x
+                    b = y3 - m2 * x3
+                    A = [[1, -m2],[1, -m1]]
+                    B = [b,a]
+                    A_ = np.linalg.inv(A)
+                    X = A_.dot(B)
+                    print(f'Matrix X: {X}')
+                    y1, x1 = X
+                    dist = np.sqrt((X[1] - x) ** 2 + (X[0] - y) ** 2)
+                    # x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
+                    theta1 = np.math.atan2(y1-y,x1-x)
+                    if theta1 < 0:
+                        theta1 += 2*np.math.pi
+                    # print(X)
+                    print(radian, theta1)
+                    if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1,y1), obs):
+                        best_dist = dist
+                    # observations.append(dist)
             observations[radian] = best_dist
         return observations
 
@@ -113,9 +127,9 @@ class Base():
         (x3, y3), (x4, y4) = line
         if x4 == x3:
             # Vertical line
-            on_line = (y3 < y < y4) and np.abs(x4 - x) <= 0.01
+            on_line = (y3-0.001 <= y <= y4+0.001) and np.abs(x4 - x) <= 0.01
         else:
-            on_line = (x3 < x < x4) and np.abs(y4 - y) <= 0.01
+            on_line = (x3-0.001 <= x <= x4+0.001) and np.abs(y4 - y) <= 0.01
         print(point, line, on_line)
         return on_line
 
@@ -148,11 +162,11 @@ class Base():
 
 
 if __name__ == "__main__":
-    env = Base(width=100, height=100, num_obstables=0, box_w=100, box_h=100)
+    env = Base(width=1000, height=1000, num_obstables=10, box_w=100, box_h=100)
     thetas = []
-    for i in range(360, 90):
+    for i in range(0, 360, 10):
         thetas.append(i*np.pi/180)
-    x, y = 20, 20
+    x, y = 200, 200
     dists = env.get_observation(x, y, 0, thetas)
     print(dists)
     lines = []
