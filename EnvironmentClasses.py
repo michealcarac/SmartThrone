@@ -151,7 +151,7 @@ class Base():
             lines.append(line)
         return lines
 
-    def show_env(self, lines=[], point=None, step=None):
+    def show_env(self, lines=[], point=None, step=None, show=False):
         # A function to show the environment and all within it
         # Saves the figure to a png figure in the folder Figures
         # Requires:
@@ -181,6 +181,8 @@ class Base():
         else:
             name = 'Plot'
         plt.savefig(f'Figures/{name}')
+        if show:
+            plt.show()
         plt.clf()
 
 

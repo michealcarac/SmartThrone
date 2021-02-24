@@ -1,7 +1,9 @@
 # This file contains the agents that will be made and used for training
 import numpy as np
 from EnvironmentClasses import Base
-
+from keras.layers import Input, Dense
+from keras.optimizers import Adam
+from keras.models import Model
 
 class InvalidMove(ArithmeticError):
     # TODO Write custom error class for handling collision errors
@@ -10,7 +12,7 @@ class InvalidMove(ArithmeticError):
 
 class Manual():
 
-    def __init__(self, x, y, theta, FOV, LINEAR, ROTATIONAL, env):
+    def __init__(self, x, y, theta, FOV, env, LINEAR=5, ROTATIONAL=np.radians(5)):
         # Constructor for the Manual Agent class
         # Requires:
         #   x: The x position of the agent
@@ -42,7 +44,7 @@ class Manual():
             dists = self.env.get_observation(self.x, self.y, self.theta)
 
             if dists[self.theta] < self.LINEAR:
-                #raise InvalidMove
+                raise InvalidMove
                 pass
             else:
                 self.x += self.LINEAR * np.math.cos(self.theta)
@@ -69,7 +71,7 @@ class Manual():
         y2 = self.y + self.LINEAR * np.math.sin(self.theta)
         return [(x1, y1), (x2, y2)]
 
-    def show_agent(self, counter):
+    def show_agent(self, counter, show=False):
         # A function to show the agent in the environment and the direction its facing
         # Requires:
         #   Counter: to track the steps of the agent
@@ -77,24 +79,89 @@ class Manual():
         #   Nothing
         heading = self.make_heading()
         rays = self.env.get_rays(self.x, self.y, self.theta, self.FOV)
-        self.env.show_env(lines=np.concatenate([rays, [heading]]), point=(self.x, self.y), step=counter)
+        self.env.show_env(lines=np.concatenate([rays, [heading]]), point=(self.x, self.y), step=counter, show=show)
+
+
+class DQAgent(Manual):
+
+    def __init__(self, layers, inputs, start, env, path=None):
+        # Constructor for the Deep Q agent
+        # Requires:
+        #   Layers: The number of dense layers to add to the Neural Network
+        #   inputs: The sensor inputs, typically just FOV
+        #   start: The starting location of the agent in (x, y, theta)
+        #   env: The environment object the agent is in
+        #   path: The desired path for the agent to follow
+        # Returns:
+        #   The constructed Deep Q agent object
+        super().__init__(start[0], start[1], start[2], inputs, env)
+        self.path = path
+        self.step = 0
+        self.model = self.construct_model(layers, inputs, start)
+
+    def construct_model(self, num_layers, sensor_data_shape, position):
+        # Create the model for the agent to decide the best move from the given input data
+        # Requires:
+        #   num_layers: The number of dense layers to add to the model, there will always be at least 1
+        #   sensor_data_shape: The shape of the incoming sensor data, must be an array for now
+        #   position: The starting position of the model, just for input size
+        # Returns:
+        #   Model: The model used to predict the best move
+
+        # Input layer
+        model_in = Input(shape=(sensor_data_shape+len(position)))
+
+        # Making the dense layers with decreasing node count each layer
+        nodes = 8*pow(2, num_layers)
+        x = Dense(nodes, activation='relu')(model_in)
+        for i in range(num_layers):
+            nodes = nodes // 2
+            x = Dense(nodes, activation='relu')(x)
+
+        # Output layer, size 3 for the 3 available directions, forward, left, right
+        model_out = Dense(3, activation='sigmoid')(x)
+        return Model(inputs=[model_in], outputs=[model_out])
+
+    def predict_move(self):
+        # A functions to predict a move from the agents current position and perspective
+        # Requires:
+        #   Nothing
+        # Returns:
+        #   best_move: The prediected best move
+
+        # Gathers simulated sensor data from the environment and structures it for the model
+        sensor_data = self.env.get_observation(self.x, self.y, self.theta, self.FOV)
+        sensor_data = list(sensor_data.values())
+        position = [self.x, self.y, self.theta]
+        data = np.concatenate([sensor_data, position])
+        data = np.expand_dims(data, -1)
+        data = np.expand_dims(data, 0)
+
+        # Presicts the rewards for each move possibility
+        rewards = self.model.predict(data)
+
+        # Picks the best move by the highest reward
+        best_move = np.argmax(rewards)
+
+        return best_move
+
+
+
 
 
 if __name__ == "__main__":
-    env = Base(num_obstables=10, box_h=50, box_w=50)
+    env = Base(num_obstables=10, box_h=100, box_w=100)
     fov = []
     for i in range(-45, 45):
         fov.append(i * np.pi / 180)
-    agent = Manual(200, 200, 0, fov, 25, np.math.radians(5), env)
-    agent.show_agent(counter=None)
-    move_list = [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-    for i, j in enumerate(move_list):
-        agent.move(j)
-        agent.show_agent(i)
-    # command = int(input("Pick a direction to move: "))
-    # counter = 0
-    # while command != -1:
-    #     agent.move(command)
-    #     agent.show_agent(counter=counter)
-    #     counter+=1
-    #     command = int(input("Pick a direction to move: "))
+    agent = DQAgent(4, fov, (200,200,0), env, [(1,2), (2,3),(3,4),(4,5),(5,6)])
+    try:
+        i=0
+        while True and i<500:
+            move = agent.predict_move()
+            agent.move(move)
+            agent.show_agent(i, show=False)
+            i+=1
+    except InvalidMove:
+        print("Game Over!")
+        agent.show_agent(counter=None, show=True)
