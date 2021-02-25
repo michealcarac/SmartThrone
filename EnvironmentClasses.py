@@ -151,7 +151,7 @@ class Base():
             lines.append(line)
         return lines
 
-    def show_env(self, lines=[], point=None, step=None, show=False):
+    def show_env(self, lines=[], point=None, step=None, show=False, path=None):
         # A function to show the environment and all within it
         # Saves the figure to a png figure in the folder Figures
         # Requires:
@@ -170,6 +170,11 @@ class Base():
 
         if point:
             plt.plot(point[0], point[1], '*g')
+
+        if path:
+            data = list(zip(*path))
+            data = np.array(data, dtype='float32')
+            plt.scatter(data[0], data[1], s=6, c='b')
 
         plt.axis('off')
         plt.xlim(-10, self.width + 10)

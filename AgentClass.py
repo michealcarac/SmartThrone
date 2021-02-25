@@ -4,9 +4,10 @@ from EnvironmentClasses import Base
 from keras.layers import Input, Dense
 from keras.optimizers import Adam
 from keras.models import Model
+from keras.losses import mse
+import tensorflow as tf
 
 class InvalidMove(ArithmeticError):
-    # TODO Write custom error class for handling collision errors
     pass
 
 
@@ -38,7 +39,7 @@ class Manual():
         # Returns:
         #   Nothing
         # Raises:
-        #   InvalidMove: An InvalidMove error is raised if the agent is going to collide with an obstacle after the move is performed
+        #   InvalidMove: Raised if the agent is going to collide with an obstacle after the move is performed
 
         if dir == 0:
             dists = self.env.get_observation(self.x, self.y, self.theta)
@@ -52,11 +53,11 @@ class Manual():
         elif dir == 1:
             self.theta += self.ROTATIONAL
             if self.theta > 2 * np.math.pi:
-                self.theta -= 2 * np.math.pi#+(1e-6)
+                self.theta -= 2 * np.math.pi  # +(1e-6)
         else:
             self.theta -= self.ROTATIONAL
             if self.theta < 0:
-                self.theta += 2 * np.math.pi#-(1e-6)
+                self.theta += 2 * np.math.pi  # -(1e-6)
 
     def make_heading(self):
         # Helper function to show the heading of the agent
@@ -71,7 +72,7 @@ class Manual():
         y2 = self.y + self.LINEAR * np.math.sin(self.theta)
         return [(x1, y1), (x2, y2)]
 
-    def show_agent(self, counter, show=False):
+    def show_agent(self, counter, show=False, path=None):
         # A function to show the agent in the environment and the direction its facing
         # Requires:
         #   Counter: to track the steps of the agent
@@ -79,7 +80,7 @@ class Manual():
         #   Nothing
         heading = self.make_heading()
         rays = self.env.get_rays(self.x, self.y, self.theta, self.FOV)
-        self.env.show_env(lines=np.concatenate([rays, [heading]]), point=(self.x, self.y), step=counter, show=show)
+        self.env.show_env(lines=[heading], point=(self.x, self.y), step=counter, show=show, path=path)
 
 
 class DQAgent(Manual):
@@ -91,13 +92,15 @@ class DQAgent(Manual):
         #   inputs: The sensor inputs, typically just FOV
         #   start: The starting location of the agent in (x, y, theta)
         #   env: The environment object the agent is in
-        #   path: The desired path for the agent to follow
+        #   path: The desired path for the agent to follow, should be of the structure [(x, y, theta)]
         # Returns:
         #   The constructed Deep Q agent object
         super().__init__(start[0], start[1], start[2], inputs, env)
         self.path = path
         self.step = 0
-        self.model = self.construct_model(layers, inputs, start)
+        self.model = self.construct_model(layers, len(inputs), start)
+        self.LR = .01
+        self.DF = .1
 
     def construct_model(self, num_layers, sensor_data_shape, position):
         # Create the model for the agent to decide the best move from the given input data
@@ -109,10 +112,10 @@ class DQAgent(Manual):
         #   Model: The model used to predict the best move
 
         # Input layer
-        model_in = Input(shape=(sensor_data_shape+len(position)))
+        model_in = Input(shape=(sensor_data_shape + len(position)))
 
         # Making the dense layers with decreasing node count each layer
-        nodes = 8*pow(2, num_layers)
+        nodes = 8 * pow(2, num_layers)
         x = Dense(nodes, activation='relu')(model_in)
         for i in range(num_layers):
             nodes = nodes // 2
@@ -122,46 +125,104 @@ class DQAgent(Manual):
         model_out = Dense(3, activation='sigmoid')(x)
         return Model(inputs=[model_in], outputs=[model_out])
 
-    def predict_move(self):
-        # A functions to predict a move from the agents current position and perspective
+
+    def get_model_input(self):
+        # A helper function to get and format the data for the model
         # Requires:
         #   Nothing
         # Returns:
-        #   best_move: The prediected best move
+        #   Data: The formatted data for the model to predict on
 
-        # Gathers simulated sensor data from the environment and structures it for the model
         sensor_data = self.env.get_observation(self.x, self.y, self.theta, self.FOV)
         sensor_data = list(sensor_data.values())
         position = [self.x, self.y, self.theta]
         data = np.concatenate([sensor_data, position])
         data = np.expand_dims(data, -1)
         data = np.expand_dims(data, 0)
+        return data
 
-        # Presicts the rewards for each move possibility
-        rewards = self.model.predict(data)
+    def predict_q_val(self):
+        # A functions to predict the q value from the agents current position and perspective
+        # Requires:
+        #   Nothing
+        # Returns:
+        #   q_val: The predicted quality of each move
 
-        # Picks the best move by the highest reward
-        best_move = np.argmax(rewards)
+        # Gathers simulated sensor data from the environment and structures it for the model
+        data = self.get_model_input()
 
-        return best_move
+        # Predicts the q_value for each move possibility and returns it
+        return self.model(data)
+
+    def get_reward(self, pos, target):
+        # A function to calculate the reward at a certain point in time
+        # Requires:
+        #   Pos: The position of the agent to evaluate
+        #   Target: The current goal position of the agent
+        # Returns:
+        #   reward: The reward for the agent for taking an action towards the target, max value of 1
+
+        pos_error = mse(target, pos)
+        pos_reward = 1/pos_error
+        reward = pos_reward - self.step
+        return reward
+
+    def training_step(self):
+        # A helper function that performs one step of the training
+        # Requires:
+        #   Nothing
+        # Returns:
+        # Nothing
 
 
+        with tf.GradientTape() as tape:
 
+            # Get current q_values
+            q_vals = self.predict_q_val()
 
+            # with tape.stop_recording():
+            # Make a move
+            move = tf.argmax(q_vals, axis=1)
+            q_val = tf.reduce_max(q_vals)
+            self.move(move)
+
+            # Get new q_values
+            new_q = self.predict_q_val()
+            max_new = np.max(new_q)
+
+            # Get reward
+            pos = (self.x, self.y, self.theta)
+            target = self.path[0]
+            reward = self.get_reward(pos, target)
+
+            # Calculate the loss
+            loss = self.LR * (reward + self.DF * max_new - q_val)
+
+        # Get gradients
+        grads = tape.gradient(loss, self.model.trainable_weights)
+
+        # Apply the gradients
+        opt = Adam(0.01)
+        opt.apply_gradients(zip(grads, self.model.trainable_weights))
 
 if __name__ == "__main__":
-    env = Base(num_obstables=10, box_h=100, box_w=100)
+    env = Base(width=100, height=100, num_obstables=0, box_h=100, box_w=100)
     fov = []
     for i in range(-45, 45):
         fov.append(i * np.pi / 180)
-    agent = DQAgent(4, fov, (200,200,0), env, [(1,2), (2,3),(3,4),(4,5),(5,6)])
-    try:
-        i=0
-        while True and i<500:
-            move = agent.predict_move()
-            agent.move(move)
-            agent.show_agent(i, show=False)
-            i+=1
-    except InvalidMove:
-        print("Game Over!")
-        agent.show_agent(counter=None, show=True)
+    diagonal_path = []
+    for i in range(15, 100, 5):
+        diagonal_path.append([i, i, np.radians(45)])
+    agent = DQAgent(4, fov, (10, 10, np.radians(0)), env, diagonal_path)
+    agent.training_step()
+    # try:
+    #     agent.show_agent(counter=None, show=True, path=agent.path)
+    #     i = 0
+    #     while True and i < 1:
+    #         move = agent.move(np.argmax(agent.predict_q_val()))
+    #         agent.move(move)
+    #         agent.show_agent(i, show=False, path=agent.path)
+    #         i += 1
+    # except InvalidMove:
+    #     print("Game Over!")
+    #     agent.show_agent(counter=None, show=True, path=agent.path)
