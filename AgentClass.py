@@ -7,6 +7,7 @@ from keras.models import Model
 from keras.losses import mse
 import tensorflow as tf
 
+
 class InvalidMove(ArithmeticError):
     pass
 
@@ -58,7 +59,6 @@ class Manual():
             self.theta -= self.ROTATIONAL
             if self.theta < 0:
                 self.theta += 360
-
 
     def make_heading(self):
         # Helper function to show the heading of the agent
@@ -128,7 +128,6 @@ class DQAgent(Manual):
         model_out = Dense(3, activation='sigmoid')(x)
         return Model(inputs=[model_in], outputs=[model_out])
 
-
     def get_model_input(self):
         # A helper function to get and format the data for the model
         # Requires:
@@ -167,7 +166,7 @@ class DQAgent(Manual):
         #   reward: The reward for the agent for taking an action towards the target, max value of 1
 
         pos_error = mse(target, pos)
-        pos_reward = 1/pos_error
+        pos_reward = 1 / pos_error
         reward = pos_reward - self.step
         if hit:
             reward -= 100
@@ -243,17 +242,17 @@ class DQAgent(Manual):
             opt = Adam(0.1)
             opt.apply_gradients(zip(grads, self.model.trainable_weights))
 
-    def training_episode(self):
+    def training_episode(self, max_iter):
         # A function to handle the process of training the entire episode
         # An episode is defined as the agents life from start to when it reaches the target
         # Requires:
-        #   Nothing
+        #   max_iter: The max iterations to train for
         # Returns:
         #   Nothing
 
         finished = False
         counter = 0
-        while not finished:
+        while not finished and counter <= max_iter:
             # Make one training step
             self.training_step()
 
@@ -266,9 +265,52 @@ class DQAgent(Manual):
             if dist <= self.LINEAR:
                 self.path = self.path[1:]
                 self.step = 0
-
-            self.show_agent(counter, False, self.path)
             counter += 1
+
+    def eval_step(self):
+        # A helper function that performs one step of the training
+        # Requires:
+        #   Nothing
+        # Returns:
+        # Nothing
+
+        # This try - except block is an attempt at letting the agent learn from hitting something without ending the simulation.
+        # WIP
+        try:
+            # Get current q_values
+            q_vals = self.predict_q_val()
+            move = tf.argmax(q_vals, axis=1)
+            self.move(move)
+            return 1
+        except InvalidMove:
+            return -1
+
+    def eval_episode(self, max_iter):
+        # A function to handle the process of evaluating the entire episode
+        # An episode is defined as the agents life from start to when it reaches the target
+        # Requires:
+        #   max_iter: The max iterations to train for
+        # Returns:
+        #   Nothing
+
+        finished = False
+        counter = 0
+        while not finished and counter <= max_iter:
+            # Make one training step
+            if self.eval_step() == 1:
+                # Check if position is close enough to the current target
+                pos = (self.x, self.y)
+                target = self.path[0][:2]
+                dist = mse(pos, target)
+                if len(self.path) == 1:
+                    finished = True
+                if dist <= self.LINEAR:
+                    self.path = self.path[1:]
+                    self.step = 0
+                self.show_agent(counter, False, self.path)
+                counter += 1
+            else:
+                self.show_agent(counter, False, self.path)
 
 
 if __name__ == "__main__":
@@ -280,7 +322,9 @@ if __name__ == "__main__":
     for i in range(15, 100, 5):
         diagonal_path.append([i, i, 45])
     agent = DQAgent(4, fov, (10, 10, np.radians(0)), env, diagonal_path)
-    agent.training_episode()
+    agent.training_episode(100)
+    (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
+    agent.eval_episode(100)
     # try:
     #     agent.show_agent(counter=None, show=True, path=agent.path)
     #     i = 0
