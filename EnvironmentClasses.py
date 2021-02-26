@@ -70,7 +70,8 @@ class Base():
         #   observation: a list of distances to objects in the directions of los, same dimension as los
         observations = {}
         for radian in fov:
-            radian = theta+radian
+            angle = theta+radian
+            radian = np.radians(angle)
             if radian < 0:
                 radian += 2*np.math.pi
             if radian > 2*np.math.pi:
@@ -114,7 +115,7 @@ class Base():
                         theta1 += 2 * np.math.pi
                     if dist < best_dist and np.abs(radian - theta1) <= 0.001 and self.check_on_line((x1, y1), obs):
                         best_dist = dist
-            observations[radian] = best_dist
+            observations[angle] = best_dist
         return observations
 
     def check_on_line(self, point, line):
@@ -146,6 +147,7 @@ class Base():
         for key in dists:
             theta = key
             dist = dists[key]
+            theta = np.radians(theta)
             x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
             line = [[x, y], [x1, y1]]
             lines.append(line)
