@@ -27,6 +27,7 @@ class Manual():
         # Returns:
         #   The constructed agent object
         self.x, self.y, self.theta = x, y, theta
+        self.POS = (x, y, theta)
         self.FOV = FOV
         self.LINEAR, self.ROTATIONAL = LINEAR, ROTATIONAL
         self.env = env
@@ -99,11 +100,16 @@ class DQAgent(Manual):
         #   The constructed Deep Q agent object
         super().__init__(start[0], start[1], start[2], inputs, env)
         self.path = path
+        self.PATH = path
         self.step = 0
         self.model = self.construct_model(layers, len(inputs), start)
         self.LR = .01
         self.DF = .1
         self.EPSILON = 0.3
+
+    def reset(self):
+        (self.x, self.y, self.theta) = self.POS
+        self.path = self.PATH
 
     def construct_model(self, num_layers, sensor_data_shape, position):
         # Create the model for the agent to decide the best move from the given input data
@@ -168,7 +174,7 @@ class DQAgent(Manual):
 
         pos_error = mse(target, pos)
         pos_reward = 1 / pos_error
-        reward = pos_reward
+        reward = pos_reward - self.step*3
         if hit:
             reward -= 100
         return pos_reward
@@ -213,35 +219,27 @@ class DQAgent(Manual):
             # Apply the gradients
             opt = Adam(0.1)
             opt.apply_gradients(zip(grads, self.model.trainable_weights))
-
+            return 1
         except InvalidMove:
             with tf.GradientTape() as tape:
 
                 # Get current q_values
                 q_vals = self.predict_q_val()
-
-                # Make second best move
-                move = 1
                 q_val = tf.reduce_max(q_vals)
-                self.move(move)
-
-                # Get new q_values
-                new_q = self.predict_q_val()
-                max_new = np.max(new_q)
 
                 # Get reward
                 pos = (self.x, self.y, self.theta)
                 target = self.path[0]
                 reward = self.get_reward(pos, target, hit=True)
-
                 # Calculate the loss
-                loss = self.LR * (reward + self.DF * max_new - q_val)
+                loss = self.LR * (reward + self.DF * (-100) - q_val)
 
             # Get gradients
             grads = tape.gradient(loss, self.model.trainable_weights)
             # Apply the gradients
             opt = Adam(0.1)
             opt.apply_gradients(zip(grads, self.model.trainable_weights))
+            return -1
 
     def training_episode(self, max_iter):
         # A function to handle the process of training the entire episode
@@ -256,20 +254,20 @@ class DQAgent(Manual):
         while not finished and counter <= max_iter:
             if counter % (max_iter/10) == 0:
                 print(counter)
-
             # Make one training step
-            self.training_step()
-
-            # Check if position is close enough to the current target
-            pos = (self.x, self.y)
-            target = self.path[0][:2]
-            dist = mse(pos, target)
-            if len(self.path) == 1:
+            if self.training_step() == 1:
+                # Check if position is close enough to the current target
+                pos = (self.x, self.y)
+                target = self.path[0][:2]
+                dist = mse(pos, target)
+                if len(self.path) == 1:
+                    finished = True
+                if dist <= self.LINEAR:
+                    self.path = self.path[1:]
+                    self.step = 0
+                counter += 1
+            else:
                 finished = True
-            if dist <= self.LINEAR:
-                self.path = self.path[1:]
-                self.step = 0
-            counter += 1
 
     def eval_step(self):
         # A helper function that performs one step of the training
@@ -328,22 +326,13 @@ if __name__ == "__main__":
         diagonal_path.append([i, i, 45])
     agent = DQAgent(4, fov, (10, 10, np.radians(0)), env, diagonal_path)
     try:
-        agent.training_episode(100000)
-        (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
-        agent.path = diagonal_path
+        for i in range(100):
+            print(f"Starting epoch {i}")
+            agent.training_episode(1000)
+            agent.reset()
+
+        agent.reset()
         agent.eval_episode(100)
     except KeyboardInterrupt:
-        (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
-        agent.path = diagonal_path
+        agent.reset()
         agent.eval_episode(100)
-    # try:
-    #     agent.show_agent(counter=None, show=True, path=agent.path)
-    #     i = 0
-    #     while True and i < 1:
-    #         move = agent.move(np.argmax(agent.predict_q_val()))
-    #         agent.move(move)
-    #         agent.show_agent(i, show=False, path=agent.path)
-    #         i += 1
-    # except InvalidMove:
-    #     print("Game Over!")
-    #     agent.show_agent(counter=None, show=True, path=agent.path)
