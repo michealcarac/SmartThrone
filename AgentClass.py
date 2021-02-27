@@ -328,7 +328,7 @@ if __name__ == "__main__":
         diagonal_path.append([i, i, 45])
     agent = DQAgent(4, fov, (10, 10, np.radians(0)), env, diagonal_path)
     try:
-        agent.training_episode(10000)
+        agent.training_episode(100000)
         (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
         agent.path = diagonal_path
         agent.eval_episode(100)
