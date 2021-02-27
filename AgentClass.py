@@ -115,7 +115,7 @@ class DQAgent(Manual):
         #   Model: The model used to predict the best move
 
         # Input layer
-        model_in = Input(shape=(sensor_data_shape + len(position)))
+        model_in = Input(shape=(sensor_data_shape + 2*len(position)))
 
         # Making the dense layers with decreasing node count each layer
         nodes = 8 * pow(2, num_layers)
@@ -138,7 +138,8 @@ class DQAgent(Manual):
         sensor_data = self.env.get_observation(self.x, self.y, self.theta, self.FOV)
         sensor_data = list(sensor_data.values())
         position = [self.x, self.y, self.theta]
-        data = np.concatenate([sensor_data, position])
+        target = self.path[0]
+        data = np.concatenate([sensor_data, position, target])
         data = np.expand_dims(data, -1)
         data = np.expand_dims(data, 0)
         return data
@@ -167,7 +168,7 @@ class DQAgent(Manual):
 
         pos_error = mse(target, pos)
         pos_reward = 1 / pos_error
-        reward = pos_reward - self.step
+        reward = pos_reward
         if hit:
             reward -= 100
         return pos_reward
@@ -253,6 +254,9 @@ class DQAgent(Manual):
         finished = False
         counter = 0
         while not finished and counter <= max_iter:
+            if counter % (max_iter/10) == 0:
+                print(counter)
+
             # Make one training step
             self.training_step()
 
@@ -311,6 +315,7 @@ class DQAgent(Manual):
                 counter += 1
             else:
                 self.show_agent(counter, False, self.path)
+                finished = True
 
 
 if __name__ == "__main__":
@@ -322,9 +327,15 @@ if __name__ == "__main__":
     for i in range(15, 100, 5):
         diagonal_path.append([i, i, 45])
     agent = DQAgent(4, fov, (10, 10, np.radians(0)), env, diagonal_path)
-    agent.training_episode(100)
-    (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
-    agent.eval_episode(100)
+    try:
+        agent.training_episode(10000)
+        (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
+        agent.path = diagonal_path
+        agent.eval_episode(100)
+    except KeyboardInterrupt:
+        (agent.x, agent.y, agent.theta) = (10, 10, np.radians(0))
+        agent.path = diagonal_path
+        agent.eval_episode(100)
     # try:
     #     agent.show_agent(counter=None, show=True, path=agent.path)
     #     i = 0
