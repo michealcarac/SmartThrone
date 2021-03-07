@@ -148,7 +148,7 @@ class Base():
             theta = key
             dist = dists[key]
             theta = np.radians(theta)
-            x1, y1 = dist * np.math.cos(theta) + x, dist * np.sin(theta) + y
+            x1, y1 = dist * np.math.cos(theta) + x, dist * np.math.sin(theta) + y
             line = [[x, y], [x1, y1]]
             lines.append(line)
         return lines
@@ -187,7 +187,7 @@ class Base():
             name = f"Step_{step}"
         else:
             name = 'Plot'
-        plt.savefig(f'Figures/{name}')
+        plt.savefig(f'{name}')
         if show:
             plt.show()
         plt.clf()

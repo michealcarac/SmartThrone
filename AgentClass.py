@@ -1,11 +1,12 @@
 # This file contains the agents that will be made and used for training
 import numpy as np
 from EnvironmentClasses import Base
-from keras.layers import Input, Dense
+from keras.layers import Input, Dense, Softmax
 from keras.optimizers import Adam
 from keras.models import Model
 from keras.losses import mse
 import tensorflow as tf
+
 
 
 class InvalidMove(ArithmeticError):
@@ -45,9 +46,8 @@ class Manual():
 
         if dir == 0:
             dists = self.env.get_observation(self.x, self.y, self.theta)
-            if dists[self.theta] < self.LINEAR:
+            if dists[self.theta] <= self.LINEAR+0.001:
                 raise InvalidMove
-                pass
             else:
                 theta = np.radians(self.theta)
                 self.x += self.LINEAR * np.math.cos(theta)
@@ -103,12 +103,14 @@ class DQAgent(Manual):
         self.PATH = path
         self.step = 0
         self.model = self.construct_model(layers, len(inputs), start)
-        self.LR = .01
-        self.DF = .1
-        self.EPSILON = 0.3
+        self.LR = .1
+        self.DF = .3
+        self.EPSILON = 0
 
     def reset(self):
         (self.x, self.y, self.theta) = self.POS
+        angle = np.random.randint(-10,10)
+        self.theta += angle
         self.path = self.PATH
 
     def construct_model(self, num_layers, sensor_data_shape, position):
@@ -131,7 +133,7 @@ class DQAgent(Manual):
             x = Dense(nodes, activation='relu')(x)
 
         # Output layer, size 3 for the 3 available directions, forward, left, right
-        model_out = Dense(3, activation='sigmoid')(x)
+        model_out = Dense(3, activation='softmax')(x)
         return Model(inputs=[model_in], outputs=[model_out])
 
     def get_model_input(self):
@@ -173,11 +175,12 @@ class DQAgent(Manual):
         #   reward: The reward for the agent for taking an action towards the target, max value of 1
 
         pos_error = mse(target, pos)
-        pos_reward = 1 / pos_error
-        reward = pos_reward - self.step*3
+        reward = 1/pos_error - (self.step*5)
         if hit:
-            reward -= 100
-        return pos_reward
+            reward -= 50
+        if pos_error < self.LINEAR:
+            reward += 50
+        return reward
 
     def training_step(self):
         # A helper function that performs one step of the training
@@ -188,6 +191,7 @@ class DQAgent(Manual):
 
         # This try - except block is an attempt at letting the agent learn from hitting something without ending the simulation.
         # WIP
+        softmax = Softmax(axis=1)
         try:
             with tf.GradientTape() as tape:
 
@@ -199,20 +203,21 @@ class DQAgent(Manual):
                     move = np.random.randint(0, 3)
                 else:
                     move = tf.argmax(q_vals, axis=1)
-                q_val = tf.reduce_max(q_vals)
+                    move = move.numpy()[0]
                 self.move(move)
-
-                # Get new q_values
-                new_q = self.predict_q_val()
-                max_new = np.max(new_q)
 
                 # Get reward
                 pos = (self.x, self.y, self.theta)
                 target = self.path[0]
                 reward = self.get_reward(pos, target, hit=False)
-
                 # Calculate the loss
-                loss = self.LR * (reward + self.DF * max_new - q_val)
+                # print(tf.cast(mse(pos, target), tf.float32))
+                reward = tf.cast(reward, dtype='float32')
+                reward = reward.numpy()
+                temp = [0,0,0]
+                temp[move] = reward
+                reward = tf.convert_to_tensor(temp, dtype='float32')
+                loss = tf.squeeze(softmax(q_vals+reward))
 
             # Get gradients
             grads = tape.gradient(loss, self.model.trainable_weights)
@@ -225,14 +230,14 @@ class DQAgent(Manual):
 
                 # Get current q_values
                 q_vals = self.predict_q_val()
-                q_val = tf.reduce_max(q_vals)
 
                 # Get reward
                 pos = (self.x, self.y, self.theta)
                 target = self.path[0]
                 reward = self.get_reward(pos, target, hit=True)
                 # Calculate the loss
-                loss = self.LR * (reward + self.DF * (-100) - q_val)
+                reward = tf.cast(reward, dtype='float32')
+                loss = tf.squeeze(softmax(q_vals + reward))
 
             # Get gradients
             grads = tape.gradient(loss, self.model.trainable_weights)
@@ -252,8 +257,8 @@ class DQAgent(Manual):
         finished = False
         counter = 0
         while not finished and counter <= max_iter:
-            if counter % (max_iter/10) == 0:
-                print(counter)
+            # if counter % (max_iter/10) == 0:
+            #     print(counter)
             # Make one training step
             if self.training_step() == 1:
                 # Check if position is close enough to the current target
@@ -265,8 +270,11 @@ class DQAgent(Manual):
                 if dist <= self.LINEAR:
                     self.path = self.path[1:]
                     self.step = 0
+
+                self.show_agent(counter, False, self.path)
                 counter += 1
             else:
+                self.show_agent(counter, False, self.path)
                 finished = True
 
     def eval_step(self):
@@ -317,20 +325,50 @@ class DQAgent(Manual):
 
 
 if __name__ == "__main__":
-    env = Base(width=100, height=100, num_obstables=0, box_h=100, box_w=100)
+    import os
+    from shutil import rmtree
+    if 'Figures' in os.listdir():
+        rmtree('Figures', ignore_errors=True)
+    os.mkdir('Figures')
+    env = Base(width=100, height=210, num_obstables=0, box_h=100, box_w=100)
     fov = []
     for i in range(-45, 45):
         fov.append(i)
-    diagonal_path = []
-    for i in range(15, 100, 5):
-        diagonal_path.append([i, i, 45])
-    agent = DQAgent(4, fov, (10, 10, np.radians(0)), env, diagonal_path)
+    path = [[0, 2, 0],
+            [0, 3, 0], [0, 4, 0],
+            [0, 5, 0], [0, 6, 0],
+            [0, 7, 0], [0, 8, 0],
+            [0, 9, 0], [0, 10, 90],
+            [1, 10, 90], [2, 10, 90],
+            [3, 10, 90], [4, 10, 90],
+            [5, 10, 90], [6, 10, 90],
+            [7, 10, 0], [7, 11, 0],
+            [7, 12, 0], [7, 13, 0],
+            [7, 14, 0], [7, 15, 0],
+            [7, 16, 0], [7, 17, 0],
+            [7, 18, 0], [7, 19, 0],
+            [7, 20, 0]]
+    for i in range(len(path)):
+        temp = path[i]
+        path[i][0] = temp[0] * 10 + 10
+        path[i][1] = temp[1] * 10
+    print(path)
+    agent = DQAgent(4, fov, (10, 10, 90), env, path)
     try:
+        os.chdir('Figures')
         for i in range(100):
+            os.mkdir(f"Epoch_{i}")
+            os.chdir(f"Epoch_{i}")
             print(f"Starting epoch {i}")
             agent.training_episode(1000)
+            print(f"{len(agent.path)} points left")
             agent.reset()
+            os.chdir('..')
+            # agent.EPSILON -= .01
 
+
+        os.mkdir('Eval')
+        os.chdir('Eval')
         agent.reset()
         agent.eval_episode(100)
     except KeyboardInterrupt:
