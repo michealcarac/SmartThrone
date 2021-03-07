@@ -75,7 +75,7 @@ class Manual():
         y2 = self.y + self.LINEAR * np.math.sin(theta)
         return [(x1, y1), (x2, y2)]
 
-    def show_agent(self, counter, show=False, path=None):
+    def show_agent(self, counter, show=False, path=None, save=True):
         # A function to show the agent in the environment and the direction its facing
         # Requires:
         #   Counter: to track the steps of the agent
@@ -83,7 +83,7 @@ class Manual():
         #   Nothing
         heading = self.make_heading()
         rays = self.env.get_rays(self.x, self.y, self.theta, self.FOV)
-        self.env.show_env(lines=[heading], point=(self.x, self.y), step=counter, show=show, path=path)
+        self.env.show_env(lines=[heading], point=(self.x, self.y), step=counter, show=show, path=path, save=save)
 
 
 class DQAgent(Manual):
@@ -271,10 +271,10 @@ class DQAgent(Manual):
                     self.path = self.path[1:]
                     self.step = 0
 
-                self.show_agent(counter, False, self.path)
+                self.show_agent(counter, False, self.path, save=False)
                 counter += 1
             else:
-                self.show_agent(counter, False, self.path)
+                self.show_agent(counter, False, self.path, save=False)
                 finished = True
 
     def eval_step(self):
@@ -356,7 +356,7 @@ if __name__ == "__main__":
     agent = DQAgent(4, fov, (10, 10, 90), env, path)
     try:
         os.chdir('Figures')
-        for i in range(100):
+        for i in range(100000):
             os.mkdir(f"Epoch_{i}")
             os.chdir(f"Epoch_{i}")
             print(f"Starting epoch {i}")
